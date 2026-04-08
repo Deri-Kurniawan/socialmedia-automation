@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/lib/db";
 import { eq, and } from "drizzle-orm";
-import { account, uploadHistory } from "@/lib/db/schema";
+import { account, integrationAccount, uploadHistory } from "@/lib/db/schema";
 import { setUploadProgress } from "../upload-progress/route";
 
 // YouTube Category ID to Name mapping
@@ -58,48 +58,103 @@ async function refreshAccessToken(refreshToken: string): Promise<{ access_token:
   }
 }
 
-// Get valid access token (refresh if expired)
-async function getValidAccessToken(userId: string): Promise<string | null> {
-  const userAccount = await db.query.account.findFirst({
-    where: and(eq(account.userId, userId), eq(account.providerId, "google")),
-  });
-
-  if (!userAccount?.accessToken) {
+// Get valid access token for a specific integration (refresh if expired)
+async function getValidAccessTokenForIntegration(
+  integration: typeof integrationAccount.$inferSelect
+): Promise<{ token: string; integrationId: string } | null> {
+  if (!integration.accessToken) {
     return null;
   }
 
   // Check if token is expired (with 5 minute buffer)
   const now = new Date();
-  const expiresAt = userAccount.accessTokenExpiresAt;
+  const expiresAt = integration.accessTokenExpiresAt;
   const isExpired = !expiresAt || new Date(expiresAt.getTime() - 5 * 60 * 1000) < now;
 
   if (!isExpired) {
-    return userAccount.accessToken;
+    return { token: integration.accessToken, integrationId: integration.id };
   }
 
   // Token expired, try to refresh
-  if (!userAccount.refreshToken) {
-    console.error("No refresh token available");
+  if (!integration.refreshToken) {
+    console.error("No refresh token available for integration:", integration.id);
     return null;
   }
 
-  console.log("Refreshing expired access token...");
-  const refreshed = await refreshAccessToken(userAccount.refreshToken);
+  console.log("Refreshing expired access token for integration:", integration.id);
+  const refreshed = await refreshAccessToken(integration.refreshToken);
 
   if (!refreshed) {
     return null;
   }
 
-  // Update the database with new access token
+  // Update the integration account with new access token
   const newExpiresAt = new Date(now.getTime() + refreshed.expires_in * 1000);
-  await db.update(account).set({
+  await db.update(integrationAccount).set({
     accessToken: refreshed.access_token,
     accessTokenExpiresAt: newExpiresAt,
     updatedAt: now,
-  }).where(eq(account.id, userAccount.id));
+  }).where(eq(integrationAccount.id, integration.id));
 
   console.log("Access token refreshed successfully, expires at:", newExpiresAt);
-  return refreshed.access_token;
+  return { token: refreshed.access_token, integrationId: integration.id };
+}
+
+// Get integration by ID or return default integration for user
+async function getYouTubeIntegration(
+  userId: string,
+  integrationId?: string
+): Promise<typeof integrationAccount.$inferSelect | null> {
+  if (integrationId) {
+    // Get specific integration
+    const integration = await db.query.integrationAccount.findFirst({
+      where: and(
+        eq(integrationAccount.id, integrationId),
+        eq(integrationAccount.userId, userId),
+        eq(integrationAccount.platform, "youtube"),
+        eq(integrationAccount.isActive, true)
+      ),
+    });
+    if (integration) return integration;
+  }
+
+  // Get default integration
+  const defaultIntegration = await db.query.integrationAccount.findFirst({
+    where: and(
+      eq(integrationAccount.userId, userId),
+      eq(integrationAccount.platform, "youtube"),
+      eq(integrationAccount.isActive, true),
+      eq(integrationAccount.isDefault, true)
+    ),
+  });
+
+  if (defaultIntegration) return defaultIntegration;
+
+  // Get any active integration as fallback
+  const anyIntegration = await db.query.integrationAccount.findFirst({
+    where: and(
+      eq(integrationAccount.userId, userId),
+      eq(integrationAccount.platform, "youtube"),
+      eq(integrationAccount.isActive, true)
+    ),
+  });
+
+  return anyIntegration;
+}
+
+// Legacy function - kept for compatibility but uses new approach
+async function getValidAccessToken(
+  userId: string, 
+  userEmail?: string,
+  requestedIntegrationId?: string
+): Promise<{ token: string; integrationId: string } | null> {
+  const integration = await getYouTubeIntegration(userId, requestedIntegrationId || undefined);
+  
+  if (!integration) {
+    return null;
+  }
+
+  return getValidAccessTokenForIntegration(integration);
 }
 
 // YouTube upload function using resumable upload protocol
@@ -207,7 +262,7 @@ export async function POST(request: NextRequest) {
   let privacyStatus = "public";
   let categoryId = "22";
   let videoFile: File | null = null;
-  let session: { user: { id: string } } | null = null;
+  let session: { user: { id: string; email?: string } } | null = null;
 
   try {
     // Check authentication
@@ -216,7 +271,7 @@ export async function POST(request: NextRequest) {
       setUploadProgress(uploadId, 0, "Authentication failed", "Unauthorized");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    session = sessionData as { user: { id: string } };
+    session = sessionData as { user: { id: string; email?: string } };
 
     // Parse form data
     formData = await request.formData();
@@ -226,6 +281,7 @@ export async function POST(request: NextRequest) {
     const tagsJson = formData.get("tags") as string;
     privacyStatus = formData.get("privacyStatus") as string;
     categoryId = formData.get("categoryId") as string;
+    const requestedIntegrationId = formData.get("integrationId") as string;
 
     if (!videoFile) {
       setUploadProgress(uploadId, 0, "No video file", "No video file provided");
@@ -247,17 +303,29 @@ export async function POST(request: NextRequest) {
 
     setUploadProgress(uploadId, 3, "Reading video file...");
 
-    // Get valid (possibly refreshed) access token
+    // Get valid (possibly refreshed) access token and integration account
     setUploadProgress(uploadId, 4, "Checking YouTube authentication...");
-    const accessToken = await getValidAccessToken(session!.user.id);
+    
+    // Use requested integration if provided, otherwise get default
+    let authData: { token: string; integrationId: string } | null = null;
+    
+    // Get the integration (specific or default)
+    const integration = await getYouTubeIntegration(session!.user.id, requestedIntegrationId || undefined);
+    
+    if (integration) {
+      // Get valid access token (with refresh if needed) for this integration
+      authData = await getValidAccessTokenForIntegration(integration);
+    }
 
-    if (!accessToken) {
+    if (!authData) {
       setUploadProgress(uploadId, 0, "YouTube not connected", "YouTube account not connected or token expired. Please log out and log back in.");
       return NextResponse.json({ 
         error: "YouTube account not connected or token expired", 
         details: "Please log out and log back in to refresh your YouTube connection." 
       }, { status: 401 });
     }
+
+    const { token: accessToken, integrationId } = authData;
 
     setUploadProgress(uploadId, 5, "Starting YouTube upload...");
 
@@ -275,21 +343,23 @@ export async function POST(request: NextRequest) {
     setUploadProgress(uploadId, 100, "Upload complete!", undefined);
 
     // Save upload history to database
-    const videoUrl = `https://youtube.com/watch?v=${result.id}`;
+    const contentUrl = `https://youtube.com/watch?v=${result.id}`;
     const thumbnailUrl = `https://img.youtube.com/vi/${result.id}/mqdefault.jpg`;
     
     try {
       await db.insert(uploadHistory).values({
         id: `upload_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         userId: session!.user.id,
-        videoId: result.id,
+        integrationAccountId: integrationId,
+        platform: "youtube",
+        externalId: result.id,
         title: title.substring(0, 100),
         description: description?.substring(0, 5000) || null,
         tags: JSON.stringify(tags),
         privacyStatus,
         categoryId,
         categoryName: getCategoryName(categoryId),
-        videoUrl,
+        contentUrl,
         thumbnailUrl,
         status: "completed",
         fileSize: videoBuffer.length,
@@ -304,7 +374,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       videoId: result.id,
-      videoUrl,
+      videoUrl: contentUrl,
     });
   } catch (error) {
     console.error("YouTube upload error:", error);
@@ -317,14 +387,16 @@ export async function POST(request: NextRequest) {
         await db.insert(uploadHistory).values({
           id: `upload_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
           userId: session.user.id,
-          videoId: "failed",
+          integrationAccountId: null, // Failed before getting integration
+          platform: "youtube",
+          externalId: "failed",
           title: (title || "Untitled").substring(0, 100),
           description: description?.substring(0, 5000) || null,
           tags: JSON.stringify(tags.length > 0 ? tags : []),
           privacyStatus: privacyStatus || "public",
           categoryId: categoryId || "22",
           categoryName: getCategoryName(categoryId || "22"),
-          videoUrl: "",
+          contentUrl: "",
           thumbnailUrl: null,
           status: "failed",
           errorMessage: errorMessage?.substring(0, 500),

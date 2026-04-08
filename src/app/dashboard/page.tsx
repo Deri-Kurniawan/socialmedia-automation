@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSession, signOut } from "@/lib/auth/client";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -10,23 +8,32 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ExternalLink, Play, Eye, EyeOff, Lock, AlertCircle, Clock } from "lucide-react";
-import VideoUploadForm from "@/components/video-upload-form";
+import { ExternalLink, Play, Eye, EyeOff, Lock, AlertCircle, Clock, Upload } from "lucide-react";
+import Link from "next/link";
+import { Skeleton } from "@/components/ui/skeleton";
+
+// YouTube Icon Component
+function YouTubeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+    </svg>
+  );
+}
 
 interface UploadHistoryItem {
   id: string;
-  videoId: string;
+  externalId: string;
+  platform: string;
   title: string;
   description: string | null;
   tags: string[];
   privacyStatus: string;
   categoryName: string | null;
-  videoUrl: string;
+  contentUrl: string;
   thumbnailUrl: string | null;
   status: string;
   fileSize: number | null;
@@ -35,15 +42,12 @@ interface UploadHistoryItem {
 }
 
 export default function DashboardPage() {
-  const { data: session, isPending } = useSession();
   const [uploadCount, setUploadCount] = useState(0);
   const [uploadHistory, setUploadHistory] = useState<UploadHistoryItem[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
   // Fetch upload history - must be before any early returns
   useEffect(() => {
-    if (!session) return;
-    
     const fetchHistory = async () => {
       try {
         const response = await fetch("/api/video/history");
@@ -60,39 +64,7 @@ export default function DashboardPage() {
     };
 
     fetchHistory();
-  }, [session]);
-
-  if (isPending) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-current border-t-transparent" />
-      </div>
-    );
-  }
-
-  // Note: Auth check is handled by layout.tsx server-side
-  // This check is just for TypeScript - session should always exist here
-  if (!session) {
-    return null;
-  }
-
-  const user = session.user;
-
-  const handleUploadSuccess = () => {
-    setUploadCount((prev) => prev + 1);
-    // Refresh history after successful upload
-    setTimeout(() => {
-      fetch("/api/video/history")
-        .then((res) => res.ok ? res.json() : null)
-        .then((data) => {
-          if (data?.uploads) {
-            setUploadHistory(data.uploads);
-            setUploadCount(data.uploads.length);
-          }
-        })
-        .catch(console.error);
-    }, 1000);
-  };
+  }, []);
 
   // Format file size
   const formatFileSize = (bytes: number | null) => {
@@ -141,177 +113,79 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-            Dashboard
-          </h1>
-          <p className="text-zinc-600 dark:text-zinc-400 mt-1">
-            Manage your social media automation
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3">
-            <Avatar>
-              <AvatarImage src={user.image || ""} alt={user.name} />
-              <AvatarFallback>
-                {user.name?.charAt(0).toUpperCase() || "U"}
-              </AvatarFallback>
-            </Avatar>
-            <div className="hidden sm:block">
-              <p className="font-medium text-zinc-900 dark:text-zinc-50">
-                {user.name}
-              </p>
-              <p className="text-sm text-zinc-500">{user.email}</p>
-            </div>
-          </div>
-          <Button
-            variant="outline"
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            className="ml-4"
-          >
-            Sign Out
-          </Button>
-        </div>
+    <div>
+      {/* Page Title */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
+          Dashboard
+        </h1>
+        <p className="text-zinc-600 dark:text-zinc-400 mt-1">
+          Manage your social media automation
+        </p>
       </div>
-
-      <Separator className="mb-8" />
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Connected Accounts</CardTitle>
-            <CardDescription>
-              Social media accounts linked to your profile
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-              1
-            </p>
-            <p className="text-sm text-zinc-500 mt-1">Google/YouTube</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Published Videos</CardTitle>
-            <CardDescription>
-              Videos uploaded this session
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-              {uploadCount}
-            </p>
-            <p className="text-sm text-zinc-500 mt-1">This session</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">AI Generations</CardTitle>
-            <CardDescription>
-              Metadata generated by AI
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-              ∞
-            </p>
-            <p className="text-sm text-zinc-500 mt-1">Unlimited with Fireworks</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Main Content Tabs */}
-      <Tabs defaultValue="upload" className="w-full">
-        <TabsList className="mb-6">
-          <TabsTrigger value="upload">Upload Video</TabsTrigger>
-          <TabsTrigger value="youtube">YouTube Status</TabsTrigger>
-          <TabsTrigger value="history">Upload History</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="upload">
-          <div className="max-w-3xl">
-            <VideoUploadForm onSuccess={handleUploadSuccess} />
-          </div>
-        </TabsContent>
-
-        <TabsContent value="youtube">
-          <Card>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 items-stretch">
+        <Link href="/dashboard/integrations" className="block h-full">
+          <Card className="hover:border-zinc-300 transition-colors cursor-pointer h-full flex flex-col">
             <CardHeader>
-              <CardTitle>YouTube Integration</CardTitle>
+              <CardTitle className="text-lg">Connected Accounts</CardTitle>
               <CardDescription>
-                Your Google account is connected with full YouTube permissions
+                Social media accounts linked to your profile
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-4 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-lg mb-6">
-                <div className="h-12 w-12 bg-red-600 rounded-lg flex items-center justify-center">
-                  <svg
-                    className="h-6 w-6 text-white"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
-                  </svg>
+            <CardContent className="flex-1 flex items-end">
+              <div className="flex items-center gap-2">
+                <div className="bg-red-600 text-white p-1.5 rounded">
+                  <YouTubeIcon className="h-5 w-5" />
                 </div>
-                <div className="flex-1">
-                  <p className="font-medium text-zinc-900 dark:text-zinc-50">
-                    YouTube Channel Access
-                  </p>
-                  <p className="text-sm text-zinc-500">
-                    Full permissions including upload, analytics, and content management
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 bg-green-500 rounded-full"></span>
-                  <span className="text-sm text-green-600 font-medium">
-                    Connected
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="font-medium text-zinc-900 dark:text-zinc-50">
-                  Granted Permissions:
-                </h4>
-                <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  <li className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 bg-green-500 rounded-full"></span>
-                    Upload videos
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 bg-green-500 rounded-full"></span>
-                    Manage videos
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 bg-green-500 rounded-full"></span>
-                    View analytics
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 bg-green-500 rounded-full"></span>
-                    Channel memberships
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 bg-green-500 rounded-full"></span>
-                    Content partner program
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 bg-green-500 rounded-full"></span>
-                    Monetization data
-                  </li>
-                </ul>
+                <span className="text-sm text-zinc-500">Manage integrations →</span>
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+        </Link>
 
-        <TabsContent value="history">
+        <Link href="/dashboard/upload" className="block h-full">
+          <Card className="hover:border-zinc-300 transition-colors cursor-pointer h-full flex flex-col">
+            <CardHeader>
+              <CardTitle className="text-lg">Upload Video</CardTitle>
+              <CardDescription>
+                Upload new videos to your connected channels
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex-1 flex items-end">
+              <div className="flex items-center gap-2">
+                <div className="bg-blue-600 text-white p-1.5 rounded">
+                  <Play className="h-5 w-5" />
+                </div>
+                <span className="text-sm text-zinc-500">Go to upload page →</span>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Card className="h-full flex flex-col">
+          <CardHeader>
+            <CardTitle className="text-lg">Total Uploads</CardTitle>
+            <CardDescription>
+              All-time videos uploaded
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1 flex flex-col justify-end">
+            <p className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
+              {uploadCount}
+            </p>
+            <p className="text-sm text-zinc-500 mt-1">
+              <Link href="/dashboard/history" className="text-blue-600 hover:underline">
+                View history →
+              </Link>
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Upload History Section */}
+      <div className="w-full">
           <Card>
             <CardHeader>
               <CardTitle>Upload History</CardTitle>
@@ -321,8 +195,20 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               {isLoadingHistory ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-current border-t-transparent" />
+                <div className="space-y-4 py-4">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="flex gap-4 p-4 border rounded-lg">
+                      <Skeleton className="w-32 h-18 rounded-md flex-shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-5 w-3/4" />
+                        <Skeleton className="h-4 w-1/2" />
+                        <div className="flex gap-2 mt-2">
+                          <Skeleton className="h-5 w-16" />
+                          <Skeleton className="h-5 w-16" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : uploadHistory.length === 0 ? (
                 <div className="text-center py-12">
@@ -411,9 +297,9 @@ export default function DashboardPage() {
                             <span className="text-xs text-zinc-400">
                               {formatDate(upload.createdAt)}
                             </span>
-                            {upload.status === "completed" && upload.videoUrl && (
+                            {upload.status === "completed" && upload.contentUrl && (
                               <a
-                                href={upload.videoUrl}
+                                href={upload.contentUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="flex items-center gap-1 text-sm text-red-600 hover:text-red-700 font-medium"
@@ -431,8 +317,7 @@ export default function DashboardPage() {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+        </div>
+      </div>
   );
 }

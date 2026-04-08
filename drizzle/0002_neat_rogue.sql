@@ -1,0 +1,1 @@
+ALTER TABLE `integration_account` ADD `google_account_id` text;

@@ -2,9 +2,18 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
+import { cache } from "react";
+import { headers } from "next/headers";
 
-// All YouTube OAuth scopes for comprehensive YouTube integration
-const youtubeScopes = [
+// Login scopes - minimal, just for authentication
+const loginScopes = [
+  "openid",
+  "email",
+  "profile",
+];
+
+// Integration scopes - full YouTube permissions (used separately from login)
+export const youtubeIntegrationScopes = [
   // Core YouTube Data API scopes
   "https://www.googleapis.com/auth/youtube", // Full YouTube account management
   "https://www.googleapis.com/auth/youtube.readonly", // Read-only access
@@ -35,11 +44,11 @@ export const auth = betterAuth({
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      // All YouTube OAuth scopes for comprehensive integration
-      scope: youtubeScopes,
-      // Request offline access to get a refresh token (token persists forever)
+      // Login uses minimal scopes - integration will use separate OAuth flow
+      scope: loginScopes,
+      // Request offline access to get a refresh token
       accessType: "offline",
-      prompt: "consent", // Force consent screen to get refresh token every time
+      prompt: "consent",
     },
   },
   session: {
@@ -66,3 +75,9 @@ export const auth = betterAuth({
 });
 
 export type Auth = typeof auth;
+
+// Cached session getter to dedupe calls within the same request
+// This prevents multiple DB hits when both layout and page need the session
+export const getSessionCached = cache(async () => {
+  return await auth.api.getSession({ headers: await headers() });
+});

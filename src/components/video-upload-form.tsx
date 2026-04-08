@@ -74,6 +74,7 @@ const formSchema = z.object({
 
 interface VideoUploadFormProps {
   onSuccess?: () => void;
+  selectedIntegrationId?: string | null;
 }
 
 function AnimatedProgressBar({ progress, status }: { progress: number; status: string }) {
@@ -127,7 +128,7 @@ function AnimatedStatus({ status, isError }: { status: string; isError?: boolean
   );
 }
 
-export default function VideoUploadForm({ onSuccess }: VideoUploadFormProps) {
+export default function VideoUploadForm({ onSuccess, selectedIntegrationId }: VideoUploadFormProps) {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -385,6 +386,9 @@ export default function VideoUploadForm({ onSuccess }: VideoUploadFormProps) {
       formData.append("tags", JSON.stringify(tags));
       formData.append("privacyStatus", data.privacyStatus);
       formData.append("categoryId", data.categoryId);
+      if (selectedIntegrationId) {
+        formData.append("integrationId", selectedIntegrationId);
+      }
 
       const response = await fetch("/api/video/upload", {
         method: "POST",

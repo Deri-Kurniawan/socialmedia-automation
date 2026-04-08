@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import Link from "next/link";
+import { Link } from "next-view-transitions";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Card,
@@ -501,14 +501,18 @@ export function HistoryClient({ initialUploads, integrations, userName }: Histor
                         <Card className="hover:border-zinc-300 transition-colors">
                           <CardContent className="p-4">
                             <div className="flex gap-4">
-                              {/* Thumbnail */}
-                              <div className="flex-shrink-0">
+                              {/* Thumbnail - Fixed aspect ratio prevents layout shift */}
+                              <div className="flex-shrink-0 w-40 aspect-video bg-zinc-200 dark:bg-zinc-800 rounded-lg overflow-hidden">
                                 {upload.thumbnailUrl && upload.status === "completed" ? (
-                                  <div className="relative group">
+                                  <div className="relative group w-full h-full">
                                     <img
                                       src={upload.thumbnailUrl}
                                       alt={upload.title}
-                                      className="w-40 h-[90px] object-cover rounded-lg bg-zinc-200"
+                                      width={160}
+                                      height={90}
+                                      className="w-full h-full object-cover"
+                                      loading="lazy"
+                                      decoding="async"
                                       onError={(e) => {
                                         (e.target as HTMLImageElement).src =
                                           "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='90' fill='%23e4e4e7'%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%2371717b' font-size='10'%3ENo Preview%3C/text%3E%3C/svg%3E";
@@ -519,7 +523,7 @@ export function HistoryClient({ initialUploads, integrations, userName }: Histor
                                     </div>
                                   </div>
                                 ) : (
-                                  <div className="w-40 h-[90px] bg-zinc-200 dark:bg-zinc-800 rounded-lg flex items-center justify-center">
+                                  <div className="w-full h-full flex items-center justify-center">
                                     {upload.status === "failed" ? (
                                       <AlertCircle className="h-8 w-8 text-red-400" />
                                     ) : (

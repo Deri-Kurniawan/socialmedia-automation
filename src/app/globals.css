@@ -128,3 +128,37 @@
     @apply font-sans;
   }
 }
+
+/* Prevent layout shift for images and media */
+img, video {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Aspect ratio containers prevent layout shift */
+.aspect-video {
+  aspect-ratio: 16 / 9;
+}
+
+.aspect-square {
+  aspect-ratio: 1 / 1;
+}
+
+/* Content containment for performance and layout stability */
+.contain-layout {
+  contain: layout;
+}
+
+.contain-content {
+  contain: content;
+}
+
+/* Prevent layout shift from scrollbar appearance */
+html {
+  overflow-y: scroll;
+}
+
+/* Ensure skeletons match content dimensions exactly */
+[data-slot="skeleton"] {
+  contain: strict;
+}

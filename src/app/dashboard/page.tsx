@@ -12,7 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ExternalLink, Play, Eye, EyeOff, Lock, AlertCircle, Clock, Upload } from "lucide-react";
-import Link from "next/link";
+import { Link } from "next-view-transitions";
 import { Skeleton } from "@/components/ui/skeleton";
 
 // YouTube Icon Component
@@ -198,8 +198,9 @@ export default function DashboardPage() {
                 <div className="space-y-4 py-4">
                   {[1, 2, 3, 4].map((i) => (
                     <div key={i} className="flex gap-4 p-4 border rounded-lg">
-                      <Skeleton className="w-32 h-18 rounded-md flex-shrink-0" />
-                      <div className="flex-1 space-y-2">
+                      {/* Skeleton matches thumbnail aspect-ratio exactly */}
+                      <Skeleton className="w-32 aspect-video rounded-md flex-shrink-0" />
+                      <div className="flex-1 space-y-2 min-w-0">
                         <Skeleton className="h-5 w-3/4" />
                         <Skeleton className="h-4 w-1/2" />
                         <div className="flex gap-2 mt-2">
@@ -225,19 +226,23 @@ export default function DashboardPage() {
                         key={upload.id}
                         className="flex gap-4 p-4 border rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
                       >
-                        {/* Thumbnail */}
-                        <div className="flex-shrink-0">
+                        {/* Thumbnail - Fixed aspect ratio container prevents layout shift */}
+                        <div className="flex-shrink-0 w-32 aspect-video bg-zinc-200 dark:bg-zinc-800 rounded-md overflow-hidden">
                           {upload.thumbnailUrl && upload.status === "completed" ? (
                             <img
                               src={upload.thumbnailUrl}
                               alt={upload.title}
-                              className="w-32 h-18 object-cover rounded-md bg-zinc-200"
+                              width={128}
+                              height={72}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              decoding="async"
                               onError={(e) => {
-                                (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='68' fill='%23e4e4e7'%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%2371717b' font-size='10'%3ENo Preview%3C/text%3E%3C/svg%3E";
+                                (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='72' fill='%23e4e4e7'%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%2371717b' font-size='10'%3ENo Preview%3C/text%3E%3C/svg%3E";
                               }}
                             />
                           ) : (
-                            <div className="w-32 h-18 bg-zinc-200 dark:bg-zinc-800 rounded-md flex items-center justify-center">
+                            <div className="w-full h-full flex items-center justify-center">
                               {upload.status === "failed" ? (
                                 <AlertCircle className="h-8 w-8 text-red-400" />
                               ) : (

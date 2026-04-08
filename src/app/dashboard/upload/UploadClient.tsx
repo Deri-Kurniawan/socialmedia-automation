@@ -17,7 +17,7 @@ import {
   RefreshCw,
   Plus,
 } from "lucide-react";
-import Link from "next/link";
+import { Link } from "next-view-transitions";
 import VideoUploadForm from "@/components/video-upload-form";
 import { ChannelSelector } from "@/components/channel-selector";
 import { getIntegrations } from "../integrations/actions";
@@ -286,12 +286,17 @@ export function UploadClient({ initialIntegrations, user }: UploadClientProps) {
                         key={upload.id}
                         className="flex items-center gap-3 p-2 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
                       >
-                        <div className="w-16 h-9 bg-zinc-200 dark:bg-zinc-800 rounded overflow-hidden flex-shrink-0">
+                        {/* Fixed aspect ratio thumbnail prevents layout shift */}
+                        <div className="w-16 aspect-video bg-zinc-200 dark:bg-zinc-800 rounded overflow-hidden flex-shrink-0">
                           {upload.thumbnailUrl ? (
                             <img
                               src={upload.thumbnailUrl}
                               alt={upload.title}
+                              width={64}
+                              height={36}
                               className="w-full h-full object-cover"
+                              loading="lazy"
+                              decoding="async"
                               onError={(e) => {
                                 (e.target as HTMLImageElement).style.display = "none";
                               }}

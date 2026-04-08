@@ -492,12 +492,20 @@ export default function VideoUploadForm({ onSuccess, selectedIntegrationId }: Vi
                     </div>
                   )}
 
-                  {/* Extracted Frame */}
+                  {/* Extracted Frame - Fixed container prevents layout shift */}
                   <AnimatePresence>
                     {extractedFrame && (
                       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-2">
                         <Label>Extracted Frame</Label>
-                        <img src={extractedFrame} alt="Frame" className="object-contain w-full h-full bg-black" />
+                        <div className="relative aspect-video w-full bg-black rounded-lg overflow-hidden">
+                          <img 
+                            src={extractedFrame} 
+                            alt="Frame" 
+                            className="absolute inset-0 w-full h-full object-contain"
+                            loading="eager"
+                            decoding="sync"
+                          />
+                        </div>
                       </motion.div>
                     )}
                   </AnimatePresence>

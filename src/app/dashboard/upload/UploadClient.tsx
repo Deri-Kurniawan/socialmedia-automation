@@ -139,7 +139,7 @@ export function UploadClient({ initialIntegrations, user }: UploadClientProps) {
 
   if (isLoading) {
     return (
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-[1440px] mx-auto">
         {/* Header Skeleton */}
         <div className="mb-8">
           <Skeleton className="h-10 w-48 mb-2" />
@@ -163,7 +163,7 @@ export function UploadClient({ initialIntegrations, user }: UploadClientProps) {
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="max-w-[1440px] mx-auto">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-2">

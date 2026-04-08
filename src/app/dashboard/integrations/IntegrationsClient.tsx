@@ -224,7 +224,7 @@ export function IntegrationsClient({
   // Don't show skeleton just because there are no integrations (that's an empty state, not loading)
   if (isLoading) {
     return (
-      <div className="max-w-4xl">
+      <div className="max-w-[1440px]">
         <div className="mb-8">
           <Skeleton className="h-10 w-48" />
           <Skeleton className="h-4 w-64 mt-2" />
@@ -258,7 +258,7 @@ export function IntegrationsClient({
   }
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-[1440px]">
       {/* Page Title */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">Integrations</h1>

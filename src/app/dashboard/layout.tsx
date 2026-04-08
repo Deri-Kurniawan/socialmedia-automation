@@ -25,7 +25,7 @@ export default async function DashboardLayout({
         }}
       />
       <DashboardClientWrapper>
-        <main className="container mx-auto py-8 px-4">{children}</main>
+        <main className="max-w-[1440px] mx-auto py-8 px-4">{children}</main>
       </DashboardClientWrapper>
     </div>
   );

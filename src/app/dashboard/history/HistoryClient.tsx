@@ -247,7 +247,7 @@ export function HistoryClient({ initialUploads, integrations, userName }: Histor
   }, [filteredUploads]);
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="max-w-[1440px] mx-auto">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-2">

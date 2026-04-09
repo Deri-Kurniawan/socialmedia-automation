@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { Link } from "next-view-transitions";
 import { motion, AnimatePresence } from "framer-motion";
+import { format, formatDistanceToNow, differenceInMinutes, differenceInHours, differenceInDays } from "date-fns";
 import {
   Card,
   CardContent,
@@ -39,6 +40,7 @@ import {
   Trash2,
   RefreshCw,
   Check,
+  CalendarClock,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -58,6 +60,7 @@ interface Upload {
   fileSize: number | null;
   duration: number | null;
   errorMessage: string | null;
+  scheduledFor: string | null;
   createdAt: string;
   updatedAt: string;
   integrationAccountId: string | null;
@@ -131,25 +134,29 @@ export function HistoryClient({ initialUploads, integrations, userName }: Histor
     const completed = uploads.filter((u) => u.status === "completed").length;
     const failed = uploads.filter((u) => u.status === "failed").length;
     const processing = uploads.filter((u) => u.status === "processing").length;
+    const scheduled = uploads.filter((u) => u.status === "scheduled").length;
     const totalSize = uploads.reduce((acc, u) => acc + (u.fileSize || 0), 0);
-    return { completed, failed, processing, totalSize };
+    return { completed, failed, processing, scheduled, totalSize };
   }, [uploads]);
 
   const refreshHistory = async () => {
     setIsRefreshing(true);
-    try {
-      const response = await fetch("/api/video/history");
-      if (response.ok) {
+    
+    await toast.promise(
+      fetch("/api/video/history").then(async (response) => {
+        if (!response.ok) throw new Error("Failed to refresh");
         const data = await response.json();
         setUploads(data.uploads || []);
-        toast.success("History refreshed");
+        return data;
+      }),
+      {
+        loading: "Refreshing history...",
+        success: "History refreshed",
+        error: "Failed to refresh history",
       }
-    } catch (error) {
-      console.error("Failed to refresh history:", error);
-      toast.error("Failed to refresh history");
-    } finally {
-      setIsRefreshing(false);
-    }
+    );
+    
+    setIsRefreshing(false);
   };
 
   // Format file size
@@ -161,33 +168,26 @@ export function HistoryClient({ initialUploads, integrations, userName }: Histor
     return `${mb.toFixed(2)} MB`;
   };
 
-  // Format date
+  // Format date using date-fns
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return {
-      full: date.toLocaleString("en-US", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      full: format(date, "MMMM d, yyyy 'at' h:mm a"),
       relative: getRelativeTime(date),
     };
   };
 
   const getRelativeTime = (date: Date) => {
     const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
+    const minutes = differenceInMinutes(now, date);
+    const hours = differenceInHours(now, date);
+    const days = differenceInDays(now, date);
 
     if (minutes < 1) return "Just now";
     if (minutes < 60) return `${minutes}m ago`;
     if (hours < 24) return `${hours}h ago`;
     if (days < 7) return `${days}d ago`;
-    return date.toLocaleDateString();
+    return format(date, "MMM d, yyyy");
   };
 
   // Get privacy icon
@@ -226,6 +226,13 @@ export function HistoryClient({ initialUploads, integrations, userName }: Histor
           <Badge variant="secondary" className="flex items-center gap-1">
             <RefreshCw className="h-3 w-3 animate-spin" />
             Processing
+          </Badge>
+        );
+      case "scheduled":
+        return (
+          <Badge variant="secondary" className="bg-amber-500 text-white hover:bg-amber-600 flex items-center gap-1">
+            <Calendar className="h-3 w-3" />
+            Scheduled
           </Badge>
         );
       default:
@@ -281,7 +288,7 @@ export function HistoryClient({ initialUploads, integrations, userName }: Histor
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
         <Card>
           <CardContent className="py-4">
             <div className="flex items-center gap-3">
@@ -317,6 +324,19 @@ export function HistoryClient({ initialUploads, integrations, userName }: Histor
               <div>
                 <p className="text-2xl font-bold">{stats.processing}</p>
                 <p className="text-xs text-zinc-500">Processing</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex items-center gap-3">
+              <div className="bg-amber-100 dark:bg-amber-900/30 p-2 rounded-lg">
+                <CalendarClock className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{stats.scheduled}</p>
+                <p className="text-xs text-zinc-500">Scheduled</p>
               </div>
             </div>
           </CardContent>
@@ -362,6 +382,7 @@ export function HistoryClient({ initialUploads, integrations, userName }: Histor
                 <SelectItem value="completed">Completed</SelectItem>
                 <SelectItem value="failed">Failed</SelectItem>
                 <SelectItem value="processing">Processing</SelectItem>
+                <SelectItem value="scheduled">Scheduled</SelectItem>
               </SelectContent>
             </Select>
 
@@ -468,15 +489,7 @@ export function HistoryClient({ initialUploads, integrations, userName }: Histor
               <div className="flex items-center gap-3 mb-4">
                 <Calendar className="h-4 w-4 text-zinc-400" />
                 <h3 className="text-sm font-medium text-zinc-600">
-                  {new Date(date).toLocaleDateString("en-US", {
-                    weekday: "long",
-                    month: "long",
-                    day: "numeric",
-                    year:
-                      new Date(date).getFullYear() !== new Date().getFullYear()
-                        ? "numeric"
-                        : undefined,
-                  })}
+                  {format(new Date(date), "EEEE, MMMM d, yyyy")}
                 </h3>
                 <div className="flex-1 border-t border-zinc-200" />
                 <Badge variant="secondary" className="text-xs">
@@ -601,6 +614,16 @@ export function HistoryClient({ initialUploads, integrations, userName }: Histor
                                         +{upload.tags.length - 8} more
                                       </span>
                                     )}
+                                  </div>
+                                )}
+
+                                {/* Scheduled Time */}
+                                {upload.status === "scheduled" && upload.scheduledFor && (
+                                  <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                                    <p className="text-sm text-amber-700">
+                                      <CalendarClock className="h-4 w-4 inline mr-1" />
+                                      Will be published on {format(new Date(upload.scheduledFor), "MMM d, yyyy 'at' h:mm a")}
+                                    </p>
                                   </div>
                                 )}
 

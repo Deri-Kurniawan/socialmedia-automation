@@ -40,6 +40,7 @@ export default async function HistoryPage() {
     // Convert Date objects to ISO strings for client component
     createdAt: upload.createdAt.toISOString(),
     updatedAt: upload.updatedAt.toISOString(),
+    scheduledFor: upload.scheduledFor ? upload.scheduledFor.toISOString() : null,
     integrationAccount: undefined, // Remove nested object
   }));
 

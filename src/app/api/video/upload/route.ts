@@ -167,6 +167,7 @@ async function uploadToYouTube(
     tags: string[];
     privacyStatus: string;
     categoryId: string;
+    publishAt?: string; // ISO string for scheduled publishing
   },
   uploadId: string
 ) {
@@ -193,6 +194,8 @@ async function uploadToYouTube(
       status: {
         privacyStatus: metadata.privacyStatus,
         selfDeclaredMadeForKids: false,
+        // For scheduled uploads: if publishAt is set, video will be private until that time
+        ...(metadata.publishAt && { publishAt: metadata.publishAt }),
       },
     }),
   });
@@ -261,6 +264,7 @@ export async function POST(request: NextRequest) {
   let tags: string[] = [];
   let privacyStatus = "public";
   let categoryId = "22";
+  let schedulePublishAt: string | null = null;
   let videoFile: File | null = null;
   let session: { user: { id: string; email?: string } } | null = null;
 
@@ -282,21 +286,22 @@ export async function POST(request: NextRequest) {
     privacyStatus = formData.get("privacyStatus") as string;
     categoryId = formData.get("categoryId") as string;
     const requestedIntegrationId = formData.get("integrationId") as string;
+    schedulePublishAt = formData.get("schedulePublishAt") as string;
 
     if (!videoFile) {
       setUploadProgress(uploadId, 0, "No video file", "No video file provided");
       return NextResponse.json({ error: "No video file provided" }, { status: 400 });
     }
 
-    // Parse and validate tags - TOTAL 500 char limit
+    // Parse and validate tags - TOTAL 500 char limit including commas (comma-separated format)
     tags = JSON.parse(tagsJson || "[]") as string[];
-    const totalTagChars = tags.join("").length;
+    const totalTagChars = tags.length > 0 ? tags.join(",").length : 0;
     const MAX_TAGS_TOTAL = 500;
     
     if (totalTagChars > MAX_TAGS_TOTAL) {
-      setUploadProgress(uploadId, 0, "Tags too long", `Tags exceed ${MAX_TAGS_TOTAL} character limit`);
+      setUploadProgress(uploadId, 0, "Tags too long", `Tags exceed ${MAX_TAGS_TOTAL} character limit (including commas)`);
       return NextResponse.json({ 
-        error: `Tags exceed ${MAX_TAGS_TOTAL} character limit`, 
+        error: `Tags exceed ${MAX_TAGS_TOTAL} character limit (including commas)`, 
         details: `Current: ${totalTagChars} chars` 
       }, { status: 400 });
     }
@@ -336,7 +341,14 @@ export async function POST(request: NextRequest) {
     const result = await uploadToYouTube(
       accessToken,
       videoBuffer,
-      { title, description, tags, privacyStatus, categoryId },
+      { 
+        title, 
+        description, 
+        tags, 
+        privacyStatus: schedulePublishAt ? "private" : privacyStatus, // Scheduled videos must be private initially
+        categoryId, 
+        publishAt: schedulePublishAt || undefined,
+      },
       uploadId
     );
 
@@ -356,13 +368,14 @@ export async function POST(request: NextRequest) {
         title: title.substring(0, 100),
         description: description?.substring(0, 5000) || null,
         tags: JSON.stringify(tags),
-        privacyStatus,
+        privacyStatus: schedulePublishAt ? privacyStatus : privacyStatus, // Store the eventual privacy status
         categoryId,
         categoryName: getCategoryName(categoryId),
         contentUrl,
         thumbnailUrl,
-        status: "completed",
+        status: schedulePublishAt ? "scheduled" : "completed",
         fileSize: videoBuffer.length,
+        scheduledFor: schedulePublishAt ? new Date(schedulePublishAt) : null,
         createdAt: new Date(),
         updatedAt: new Date(),
       });

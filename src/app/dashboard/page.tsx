@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { format } from "date-fns";
 import {
   Card,
   CardContent,
@@ -73,15 +74,9 @@ export default function DashboardPage() {
     return `${mb.toFixed(2)} MB`;
   };
 
-  // Format date
+  // Format date using date-fns
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return format(new Date(dateString), "MMM d, yyyy 'at' h:mm a");
   };
 
   // Get privacy icon

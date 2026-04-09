@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -9,10 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   CheckCircle,
   RefreshCw,
@@ -22,10 +20,7 @@ import {
   Star,
   ExternalLink,
   Info,
-  X,
   Lock,
-  Eye,
-  EyeOff,
 } from "lucide-react";
 import {
   Dialog,
@@ -91,6 +86,7 @@ export function IntegrationsClient({
   const [isRefreshing, setIsRefreshing] = useState<string | null>(null);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [selectedIntegrationForInfo, setSelectedIntegrationForInfo] = useState<Integration | null>(null);
+  const [showPlatformsModal, setShowPlatformsModal] = useState(false);
 
   // Handle OAuth callback results
   useEffect(() => {
@@ -166,31 +162,33 @@ export function IntegrationsClient({
   // refreshIntegrations is only called after mutations (disconnect, setDefault, etc.)
 
   const handleDisconnect = async (integrationId: string) => {
-    try {
-      const result = await disconnectIntegration(integrationId);
-      if (result.success) {
-        toast.success("Integration disconnected");
+    await toast.promise(
+      disconnectIntegration(integrationId).then((result) => {
+        if (!result.success) throw new Error(result.error || "Failed to disconnect");
         refreshIntegrations();
-      } else {
-        toast.error(result.error || "Failed to disconnect");
+        return result;
+      }),
+      {
+        loading: "Disconnecting...",
+        success: "Integration disconnected",
+        error: (err) => err.message || "Failed to disconnect integration",
       }
-    } catch (error) {
-      toast.error("Failed to disconnect integration");
-    }
+    );
   };
 
   const handleSetDefault = async (integrationId: string, platform: string) => {
-    try {
-      const result = await setDefaultIntegration(integrationId, platform);
-      if (result.success) {
-        toast.success("Default account updated");
+    await toast.promise(
+      setDefaultIntegration(integrationId, platform).then((result) => {
+        if (!result.success) throw new Error(result.error || "Failed to update default");
         refreshIntegrations();
-      } else {
-        toast.error(result.error || "Failed to update default");
+        return result;
+      }),
+      {
+        loading: "Updating default account...",
+        success: "Default account updated",
+        error: (err) => err.message || "Failed to update default account",
       }
-    } catch (error) {
-      toast.error("Failed to update default account");
-    }
+    );
   };
 
   // Reconnect/re-authenticate an integration (uses separate YouTube OAuth flow)
@@ -260,29 +258,55 @@ export function IntegrationsClient({
   return (
     <div className="max-w-[1440px]">
       {/* Page Title */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">Integrations</h1>
-        <p className="text-zinc-600 dark:text-zinc-400 mt-1">
-          Manage your connected social media accounts
-        </p>
+      <div className="mb-8 flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">Integrations</h1>
+          <p className="text-zinc-600 dark:text-zinc-400 mt-1">
+            Manage your connected social media accounts
+          </p>
+        </div>
+        <Button onClick={() => setShowPlatformsModal(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Integration
+        </Button>
       </div>
 
       {/* Active Integrations */}
       <Card className="mb-8">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CheckCircle className="h-5 w-5 text-green-500" />
-            Connected Accounts
-          </CardTitle>
-          <CardDescription>
-            {getActiveIntegrations().length} channel
-            {getActiveIntegrations().length !== 1 ? "s" : ""} connected
-            {googleAccounts.length > 0 && (
-              <span className="ml-2">
-                across {googleAccounts.length} Google account{googleAccounts.length !== 1 ? "s" : ""}
-              </span>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-xl flex items-center gap-2.5">
+                <div className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                </div>
+                Connected Accounts
+              </CardTitle>
+              <CardDescription className="mt-1.5 flex items-center gap-2">
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                  {getActiveIntegrations().length} channel{getActiveIntegrations().length !== 1 ? "s" : ""}
+                </span>
+                {googleAccounts.length > 0 && (
+                  <>
+                    <span className="text-zinc-400">•</span>
+                    <span>
+                      {googleAccounts.length} Google account{googleAccounts.length !== 1 ? "s" : ""}
+                    </span>
+                  </>
+                )}
+              </CardDescription>
+            </div>
+            {getActiveIntegrations().length > 0 && (
+              <div className="hidden sm:flex items-center gap-1.5 text-xs text-green-600 bg-green-50 dark:bg-green-950/30 px-3 py-1.5 rounded-full">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </span>
+                All systems active
+              </div>
             )}
-          </CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
           {getActiveIntegrations().length === 0 ? (
@@ -299,14 +323,17 @@ export function IntegrationsClient({
               {googleAccounts.map((account) => (
                 <div key={account.accountId} className="space-y-3">
                   {/* Google Account Header */}
-                  <div className="flex items-center gap-2 px-1">
-                    <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
-                      <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                        {account.email?.charAt(0).toUpperCase() || "G"}
-                      </span>
+                  <div className="flex items-center gap-3 px-1 py-2 bg-zinc-50 dark:bg-zinc-900/50 rounded-lg">
+                    <div className="w-8 h-8 rounded-full bg-white dark:bg-zinc-800 shadow-sm border border-zinc-200 dark:border-zinc-700 flex items-center justify-center">
+                      <svg className="w-4 h-4" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                      </svg>
                     </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
                         {account.email || "Google Account"}
                       </p>
                       <p className="text-xs text-zinc-500">
@@ -319,45 +346,81 @@ export function IntegrationsClient({
                   <div className="space-y-3 pl-4 border-l-2 border-zinc-200 dark:border-zinc-700">
                     {account.channels.map((integration) => {
                       const config = PLATFORM_CONFIG[integration.platform];
+                      const isDefault = integration.isDefault;
                       return (
                         <div
                           key={integration.id}
-                          className="flex items-start gap-4 p-4 border rounded-lg hover:border-zinc-300 transition-colors"
+                          className={`group flex items-center gap-4 p-4 rounded-xl border transition-all hover:shadow-md ${
+                            isDefault 
+                              ? 'border-zinc-300 dark:border-zinc-600 bg-zinc-50/50 dark:bg-zinc-900/30' 
+                              : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
+                          }`}
                         >
                           {/* Platform Icon */}
-                          <div
-                            className={`${config?.color || "bg-zinc-500"} text-white p-3 rounded-lg`}
-                          >
-                            {config?.icon || <CheckCircle className="h-6 w-6" />}
+                          <div className="relative">
+                            <div
+                              className={`${config?.color || "bg-zinc-500"} text-white p-3 rounded-xl shadow-sm`}
+                            >
+                              {config?.icon || <CheckCircle className="h-6 w-6" />}
+                            </div>
+                            {isDefault && (
+                              <div className="absolute -top-1 -right-1 w-5 h-5 bg-amber-400 rounded-full flex items-center justify-center shadow-sm">
+                                <Star className="h-3 w-3 text-white fill-white" />
+                              </div>
+                            )}
                           </div>
 
                           {/* Integration Info */}
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">
                                 {integration.name}
                               </h3>
-                              {integration.isDefault && (
-                                <Badge variant="secondary" className="text-xs">
-                                  <Star className="h-3 w-3 mr-1" />
+                              {isDefault && (
+                                <span className="text-xs font-medium text-amber-600 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded-full">
                                   Default
-                                </Badge>
+                                </span>
                               )}
                             </div>
                             <p className="text-sm text-zinc-500">
                               {config?.name || integration.platform}
                               {integration.handle && (
-                                <span className="ml-1">• {integration.handle}</span>
+                                <a 
+                                  href={`https://youtube.com/${integration.handle}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-zinc-400 hover:text-blue-600 transition-colors"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {' '}@{integration.handle.replace('@', '')}
+                                </a>
                               )}
                             </p>
-                            <p className="text-xs text-zinc-400 mt-0.5">
-                              Connected{" "}
-                              {new Date(integration.createdAt).toLocaleDateString()}
+                            <p className="text-xs text-zinc-400 mt-0.5 flex items-center gap-1">
+                              <span className="inline-block w-1 h-1 rounded-full bg-green-500"></span>
+                              Connected {format(new Date(integration.createdAt), "MMM d, yyyy")}
                             </p>
                           </div>
 
                           {/* Actions */}
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1">
+                            {/* Set Default Toggle - Only show when multiple integrations */}
+                            {getPlatformIntegrations(integration.platform).length > 1 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleSetDefault(integration.id, integration.platform)}
+                                className={`h-8 w-8 p-0 ${
+                                  isDefault 
+                                    ? 'text-amber-500 hover:text-amber-600 hover:bg-amber-50' 
+                                    : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'
+                                }`}
+                                title={isDefault ? "Default account" : "Set as default"}
+                              >
+                                <Star className={`h-4 w-4 ${isDefault ? 'fill-current' : ''}`} />
+                              </Button>
+                            )}
+
                             {/* Info Button */}
                             <Button
                               variant="ghost"
@@ -366,24 +429,11 @@ export function IntegrationsClient({
                                 setSelectedIntegrationForInfo(integration);
                                 setShowInfoModal(true);
                               }}
-                              className="text-zinc-500 hover:text-blue-600"
+                              className="h-8 w-8 p-0 text-zinc-400 hover:text-blue-600 hover:bg-blue-50"
+                              title="View details"
                             >
-                              <Info className="h-4 w-4 mr-1" />
-                              Info
+                              <Info className="h-4 w-4" />
                             </Button>
-
-                            {/* Set Default Toggle */}
-                            {getPlatformIntegrations(integration.platform).length > 1 && (
-                              <div className="flex items-center gap-2 mr-4">
-                                <Switch
-                                  checked={integration.isDefault}
-                                  onCheckedChange={() =>
-                                    handleSetDefault(integration.id, integration.platform)
-                                  }
-                                />
-                                <span className="text-sm text-zinc-500">Default</span>
-                              </div>
-                            )}
 
                             {/* Reconnect Button */}
                             <Button
@@ -393,14 +443,14 @@ export function IntegrationsClient({
                                 reconnectIntegration(integration.id, integration.platform)
                               }
                               disabled={isRefreshing === integration.id}
-                              className="text-zinc-500 hover:text-zinc-900"
+                              className="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100"
+                              title="Reconnect"
                             >
                               <RefreshCw
-                                className={`h-4 w-4 mr-1 ${
+                                className={`h-4 w-4 ${
                                   isRefreshing === integration.id ? "animate-spin" : ""
                                 }`}
                               />
-                              Reconnect
                             </Button>
 
                             {/* Disconnect Button */}
@@ -408,10 +458,10 @@ export function IntegrationsClient({
                               variant="ghost"
                               size="sm"
                               onClick={() => handleDisconnect(integration.id)}
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                              className="h-8 w-8 p-0 text-zinc-400 hover:text-red-600 hover:bg-red-50"
+                              title="Disconnect"
                             >
-                              <Trash2 className="h-4 w-4 mr-1" />
-                              Disconnect
+                              <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
                         </div>
@@ -424,56 +474,107 @@ export function IntegrationsClient({
               {/* Ungrouped Integrations (legacy or without googleAccountId) */}
               {ungroupedIntegrations.length > 0 && (
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2 px-1">
-                    <p className="text-sm font-medium text-zinc-500">Other Channels</p>
+                  <div className="flex items-center gap-3 px-1 py-2 bg-zinc-50 dark:bg-zinc-900/50 rounded-lg">
+                    <div className="w-8 h-8 rounded-full bg-white dark:bg-zinc-800 shadow-sm border border-zinc-200 dark:border-zinc-700 flex items-center justify-center">
+                      <svg className="w-4 h-4" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        Other Channels
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        {ungroupedIntegrations.length} channel{ungroupedIntegrations.length !== 1 ? "s" : ""}
+                      </p>
+                    </div>
                   </div>
                   <div className="space-y-3 pl-4 border-l-2 border-zinc-200 dark:border-zinc-700">
                     {ungroupedIntegrations.map((integration) => {
                       const config = PLATFORM_CONFIG[integration.platform];
+                      const isDefault = integration.isDefault;
                       return (
                         <div
                           key={integration.id}
-                          className="flex items-start gap-4 p-4 border rounded-lg hover:border-zinc-300 transition-colors"
+                          className={`group flex items-center gap-4 p-4 rounded-xl border transition-all hover:shadow-md ${
+                            isDefault 
+                              ? 'border-zinc-300 dark:border-zinc-600 bg-zinc-50/50 dark:bg-zinc-900/30' 
+                              : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
+                          }`}
                         >
                           {/* Platform Icon */}
-                          <div
-                            className={`${config?.color || "bg-zinc-500"} text-white p-3 rounded-lg`}
-                          >
-                            {config?.icon || <CheckCircle className="h-6 w-6" />}
+                          <div className="relative">
+                            <div
+                              className={`${config?.color || "bg-zinc-500"} text-white p-3 rounded-xl shadow-sm`}
+                            >
+                              {config?.icon || <CheckCircle className="h-6 w-6" />}
+                            </div>
+                            {isDefault && (
+                              <div className="absolute -top-1 -right-1 w-5 h-5 bg-amber-400 rounded-full flex items-center justify-center shadow-sm">
+                                <Star className="h-3 w-3 text-white fill-white" />
+                              </div>
+                            )}
                           </div>
 
                           {/* Integration Info */}
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">
                                 {integration.name}
                               </h3>
-                              {integration.isDefault && (
-                                <Badge variant="secondary" className="text-xs">
-                                  <Star className="h-3 w-3 mr-1" />
+                              {isDefault && (
+                                <span className="text-xs font-medium text-amber-600 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded-full">
                                   Default
-                                </Badge>
+                                </span>
                               )}
                             </div>
                             <p className="text-sm text-zinc-500">
                               {config?.name || integration.platform}
                               {integration.handle && (
-                                <span className="ml-1">• {integration.handle}</span>
+                                <a 
+                                  href={`https://youtube.com/${integration.handle}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-zinc-400 hover:text-blue-600 transition-colors"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {' '}@{integration.handle.replace('@', '')}
+                                </a>
                               )}
                             </p>
                             {integration.googleAccountEmail && (
-                              <p className="text-xs text-zinc-400 mt-0.5">
-                                Google: {integration.googleAccountEmail}
+                              <p className="text-xs text-zinc-400">
+                                {integration.googleAccountEmail}
                               </p>
                             )}
-                            <p className="text-xs text-zinc-400 mt-0.5">
-                              Connected{" "}
-                              {new Date(integration.createdAt).toLocaleDateString()}
+                            <p className="text-xs text-zinc-400 mt-0.5 flex items-center gap-1">
+                              <span className="inline-block w-1 h-1 rounded-full bg-green-500"></span>
+                              Connected {format(new Date(integration.createdAt), "MMM d, yyyy")}
                             </p>
                           </div>
 
                           {/* Actions */}
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1">
+                            {/* Set Default Toggle - Only show when multiple integrations */}
+                            {getPlatformIntegrations(integration.platform).length > 1 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleSetDefault(integration.id, integration.platform)}
+                                className={`h-8 w-8 p-0 ${
+                                  isDefault 
+                                    ? 'text-amber-500 hover:text-amber-600 hover:bg-amber-50' 
+                                    : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'
+                                }`}
+                                title={isDefault ? "Default account" : "Set as default"}
+                              >
+                                <Star className={`h-4 w-4 ${isDefault ? 'fill-current' : ''}`} />
+                              </Button>
+                            )}
+
                             {/* Info Button */}
                             <Button
                               variant="ghost"
@@ -482,24 +583,11 @@ export function IntegrationsClient({
                                 setSelectedIntegrationForInfo(integration);
                                 setShowInfoModal(true);
                               }}
-                              className="text-zinc-500 hover:text-blue-600"
+                              className="h-8 w-8 p-0 text-zinc-400 hover:text-blue-600 hover:bg-blue-50"
+                              title="View details"
                             >
-                              <Info className="h-4 w-4 mr-1" />
-                              Info
+                              <Info className="h-4 w-4" />
                             </Button>
-
-                            {/* Set Default Toggle */}
-                            {getPlatformIntegrations(integration.platform).length > 1 && (
-                              <div className="flex items-center gap-2 mr-4">
-                                <Switch
-                                  checked={integration.isDefault}
-                                  onCheckedChange={() =>
-                                    handleSetDefault(integration.id, integration.platform)
-                                  }
-                                />
-                                <span className="text-sm text-zinc-500">Default</span>
-                              </div>
-                            )}
 
                             {/* Reconnect Button */}
                             <Button
@@ -509,14 +597,14 @@ export function IntegrationsClient({
                                 reconnectIntegration(integration.id, integration.platform)
                               }
                               disabled={isRefreshing === integration.id}
-                              className="text-zinc-500 hover:text-zinc-900"
+                              className="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100"
+                              title="Reconnect"
                             >
                               <RefreshCw
-                                className={`h-4 w-4 mr-1 ${
+                                className={`h-4 w-4 ${
                                   isRefreshing === integration.id ? "animate-spin" : ""
                                 }`}
                               />
-                              Reconnect
                             </Button>
 
                             {/* Disconnect Button */}
@@ -524,10 +612,10 @@ export function IntegrationsClient({
                               variant="ghost"
                               size="sm"
                               onClick={() => handleDisconnect(integration.id)}
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                              className="h-8 w-8 p-0 text-zinc-400 hover:text-red-600 hover:bg-red-50"
+                              title="Disconnect"
                             >
-                              <Trash2 className="h-4 w-4 mr-1" />
-                              Disconnect
+                              <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
                         </div>
@@ -541,19 +629,197 @@ export function IntegrationsClient({
         </CardContent>
       </Card>
 
-      {/* Available Platforms */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Plus className="h-5 w-5" />
-            Available Platforms
-          </CardTitle>
-          <CardDescription>
-            Connect YouTube channels with full upload permissions. You can add the same channel multiple times.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2">
+      {/* Integration Info Modal */}
+      <Dialog open={showInfoModal} onOpenChange={setShowInfoModal}>
+        <DialogContent className="sm:max-w-xl md:max-w-2xl lg:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Info className="h-5 w-5 text-blue-600" />
+              Integration Details
+            </DialogTitle>
+            <DialogDescription>
+              Detailed information about this YouTube channel connection
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedIntegrationForInfo && (
+            <div className="space-y-6">
+              {/* Channel Info */}
+              <div className="flex items-center gap-4 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-lg">
+                <div className="h-12 w-12 bg-red-600 rounded-lg flex items-center justify-center">
+                  <YouTubeIcon className="h-6 w-6 text-white" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium text-zinc-900 dark:text-zinc-50">
+                    {selectedIntegrationForInfo.name}
+                  </p>
+                  {selectedIntegrationForInfo.handle && (
+                    <a 
+                      href={`https://youtube.com/${selectedIntegrationForInfo.handle}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:text-blue-700 inline-flex items-center gap-1"
+                    >
+                      {selectedIntegrationForInfo.handle}
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="h-2 w-2 bg-green-500 rounded-full"></span>
+                    <span className="text-xs text-green-600 font-medium">
+                      {selectedIntegrationForInfo.isActive ? "Active" : "Inactive"}
+                    </span>
+                    {selectedIntegrationForInfo.isDefault && (
+                      <span className="text-xs font-medium text-amber-600 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Star className="h-3 w-3 fill-current" />
+                        Default
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Connection Details */}
+              <div className="space-y-3">
+                <h4 className="font-medium text-zinc-900 dark:text-zinc-50 text-sm">
+                  Connection Details
+                </h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-zinc-500">Platform</p>
+                    <p className="font-medium capitalize">{selectedIntegrationForInfo.platform}</p>
+                  </div>
+                  <div>
+                    <p className="text-zinc-500">Connected On</p>
+                    <p className="font-medium">
+                      {format(new Date(selectedIntegrationForInfo.createdAt), "MMM d, yyyy")}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-zinc-500">Last Updated</p>
+                    <p className="font-medium">
+                      {format(new Date(selectedIntegrationForInfo.updatedAt), "MMM d, yyyy")}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-zinc-500">Integration ID</p>
+                    <p className="font-medium text-xs text-zinc-400 truncate">
+                      {selectedIntegrationForInfo.id}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Permissions */}
+              {(() => {
+                // Parse scope and get granted permissions
+                const scope = selectedIntegrationForInfo.scope || "";
+                const grantedScopes = new Set(scope.split(" ").filter(Boolean));
+                
+                // All possible permissions with their scope URLs
+                const allPermissions = [
+                  { scope: "https://www.googleapis.com/auth/youtube", name: "Full YouTube account management", icon: "shield" },
+                  { scope: "https://www.googleapis.com/auth/youtube.upload", name: "Upload videos", icon: "upload" },
+                  { scope: "https://www.googleapis.com/auth/youtube.readonly", name: "Read channel data", icon: "eye" },
+                  { scope: "https://www.googleapis.com/auth/youtube.force-ssl", name: "Manage videos & comments", icon: "edit" },
+                  { scope: "https://www.googleapis.com/auth/youtube.channel-memberships.creator", name: "Channel memberships", icon: "users" },
+                  { scope: "https://www.googleapis.com/auth/youtubepartner", name: "Content management", icon: "briefcase" },
+                  { scope: "https://www.googleapis.com/auth/youtubepartner-channel-audit", name: "Channel audit", icon: "search" },
+                  { scope: "https://www.googleapis.com/auth/yt-analytics.readonly", name: "View analytics", icon: "chart" },
+                  { scope: "https://www.googleapis.com/auth/yt-analytics-monetary.readonly", name: "Monetization data", icon: "dollar" },
+                  { scope: "openid", name: "Authentication", icon: "key" },
+                  { scope: "email", name: "Email address", icon: "mail" },
+                  { scope: "profile", name: "Profile info", icon: "user" },
+                ];
+
+                const grantedCount = allPermissions.filter(p => grantedScopes.has(p.scope)).length;
+
+                return (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium text-zinc-900 dark:text-zinc-50 text-sm">
+                        Permissions
+                      </h4>
+                      <span className="text-xs text-zinc-500">
+                        {grantedCount}/{allPermissions.length} granted
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-500">
+                      Complete list of permissions available for YouTube integrations:
+                    </p>
+                    <ul className="space-y-1.5 text-sm max-h-[280px] overflow-y-auto pr-1">
+                      {allPermissions.map((permission) => {
+                        const isGranted = grantedScopes.has(permission.scope);
+                        return (
+                          <li 
+                            key={permission.scope} 
+                            className={`flex items-center justify-between p-2 rounded-lg ${
+                              isGranted 
+                                ? 'bg-green-50 dark:bg-green-950/20' 
+                                : 'bg-zinc-50 dark:bg-zinc-900/50 opacity-60'
+                            }`}
+                          >
+                            <span className={`flex items-center gap-2 ${
+                              isGranted ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-500'
+                            }`}>
+                              {permission.name}
+                            </span>
+                            <span className={`flex items-center justify-center w-5 h-5 rounded-full text-xs ${
+                              isGranted 
+                                ? 'bg-green-500 text-white' 
+                                : 'bg-zinc-300 dark:bg-zinc-700 text-zinc-500'
+                            }`}>
+                              {isGranted ? '✓' : '×'}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {selectedIntegrationForInfo.scope && (
+                      <details className="text-xs mt-4">
+                        <summary className="text-zinc-400 cursor-pointer hover:text-zinc-600 transition-colors">
+                          View raw scopes
+                        </summary>
+                        <div className="mt-2 p-2 bg-zinc-100 dark:bg-zinc-900 rounded text-zinc-500 font-mono text-[10px] break-all">
+                          {selectedIntegrationForInfo.scope}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Security Note */}
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
+                <p className="text-xs text-blue-700 dark:text-blue-400">
+                  <Lock className="h-3 w-3 inline mr-1" />
+                  <strong>Security:</strong> Your OAuth tokens are securely stored and encrypted. 
+                  Tokens can be revoked at any time by disconnecting this integration.
+                </p>
+              </div>
+
+              <Button 
+                className="w-full" 
+                onClick={() => setShowInfoModal(false)}
+              >
+                Close
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Integration Modal */}
+      <Dialog open={showPlatformsModal} onOpenChange={setShowPlatformsModal}>
+        <DialogContent className="sm:max-w-xl md:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add Integration</DialogTitle>
+            <DialogDescription>
+              Connect a new social media account to start uploading content.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4">
             {/* YouTube Integration */}
             {(() => {
               const platform = "youtube";
@@ -577,10 +843,13 @@ export function IntegrationsClient({
                         YouTube
                       </h3>
                       {integrationCount > 0 && (
-                        <Badge variant="default" className="bg-green-500">
-                          <CheckCircle className="h-3 w-3 mr-1" />
+                        <div className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                          </span>
                           {integrationCount} connected
-                        </Badge>
+                        </div>
                       )}
                     </div>
                     <p className="text-sm text-zinc-500 mt-1">
@@ -595,7 +864,10 @@ export function IntegrationsClient({
                       size="sm"
                       className="w-full mt-3"
                       variant={integrationCount > 0 ? "outline" : "default"}
-                      onClick={() => startConnectFlow(platform, integrationCount > 0)}
+                      onClick={() => {
+                        startConnectFlow(platform, integrationCount > 0);
+                        setShowPlatformsModal(false);
+                      }}
                     >
                       {integrationCount > 0 ? (
                         <><Plus className="h-4 w-4 mr-1" /> Add Another Channel</>
@@ -604,153 +876,12 @@ export function IntegrationsClient({
                       )}
                     </Button>
                     
-                    {integrationCount > 0 && (
-                      <p className="text-xs text-zinc-400 mt-2 text-center">
-                        Use different Google account?{" "}
-                        <button 
-                          onClick={() => startConnectFlow(platform, true)}
-                          className="text-blue-600 hover:underline"
-                        >
-                          Switch account
-                        </button>
-                      </p>
-                    )}
+
                   </div>
                 </div>
               );
             })()}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Integration Info Modal */}
-      <Dialog open={showInfoModal} onOpenChange={setShowInfoModal}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Info className="h-5 w-5 text-blue-600" />
-              Integration Details
-            </DialogTitle>
-            <DialogDescription>
-              Detailed information about this YouTube channel connection
-            </DialogDescription>
-          </DialogHeader>
-          
-          {selectedIntegrationForInfo && (
-            <div className="space-y-6">
-              {/* Channel Info */}
-              <div className="flex items-center gap-4 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-lg">
-                <div className="h-12 w-12 bg-red-600 rounded-lg flex items-center justify-center">
-                  <YouTubeIcon className="h-6 w-6 text-white" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium text-zinc-900 dark:text-zinc-50">
-                    {selectedIntegrationForInfo.name}
-                  </p>
-                  {selectedIntegrationForInfo.handle && (
-                    <p className="text-sm text-zinc-500">
-                      {selectedIntegrationForInfo.handle}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="h-2 w-2 bg-green-500 rounded-full"></span>
-                    <span className="text-xs text-green-600 font-medium">
-                      {selectedIntegrationForInfo.isActive ? "Active" : "Inactive"}
-                    </span>
-                    {selectedIntegrationForInfo.isDefault && (
-                      <Badge variant="secondary" className="text-xs ml-2">
-                        <Star className="h-3 w-3 mr-1" />
-                        Default
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Connection Details */}
-              <div className="space-y-3">
-                <h4 className="font-medium text-zinc-900 dark:text-zinc-50 text-sm">
-                  Connection Details
-                </h4>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-zinc-500">Platform</p>
-                    <p className="font-medium capitalize">{selectedIntegrationForInfo.platform}</p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-500">Connected On</p>
-                    <p className="font-medium">
-                      {new Date(selectedIntegrationForInfo.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-500">Last Updated</p>
-                    <p className="font-medium">
-                      {new Date(selectedIntegrationForInfo.updatedAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-500">Integration ID</p>
-                    <p className="font-medium text-xs text-zinc-400 truncate">
-                      {selectedIntegrationForInfo.id}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Permissions */}
-              <div className="space-y-3">
-                <h4 className="font-medium text-zinc-900 dark:text-zinc-50 text-sm">
-                  Granted Permissions
-                </h4>
-                <p className="text-xs text-zinc-500">
-                  This integration has been granted the following permissions via OAuth:
-                </p>
-                <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  <li className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 bg-green-500 rounded-full"></span>
-                    Upload videos
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 bg-green-500 rounded-full"></span>
-                    Manage videos
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 bg-green-500 rounded-full"></span>
-                    View analytics
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 bg-green-500 rounded-full"></span>
-                    Channel memberships
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 bg-green-500 rounded-full"></span>
-                    Content partner program
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 bg-green-500 rounded-full"></span>
-                    Monetization data
-                  </li>
-                </ul>
-              </div>
-
-              {/* Security Note */}
-              <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
-                <p className="text-xs text-blue-700 dark:text-blue-400">
-                  <Lock className="h-3 w-3 inline mr-1" />
-                  <strong>Security:</strong> Your OAuth tokens are securely stored and encrypted. 
-                  Tokens can be revoked at any time by disconnecting this integration.
-                </p>
-              </div>
-
-              <Button 
-                className="w-full" 
-                onClick={() => setShowInfoModal(false)}
-              >
-                Close
-              </Button>
-            </div>
-          )}
         </DialogContent>
       </Dialog>
 

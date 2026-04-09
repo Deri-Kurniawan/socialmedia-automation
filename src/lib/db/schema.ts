@@ -179,7 +179,8 @@ export const uploadHistory = sqliteTable(
     categoryName: text("category_name"),
     contentUrl: text("content_url").notNull(), // URL to view the content
     thumbnailUrl: text("thumbnail_url"),
-    status: text("status").notNull().default("completed"), // completed, failed, processing
+    status: text("status").notNull().default("completed"), // completed, failed, processing, scheduled
+    scheduledFor: integer("scheduled_for", { mode: "timestamp_ms" }), // For scheduled uploads
     fileSize: integer("file_size"), // in bytes
     duration: integer("duration"), // content duration in seconds
     errorMessage: text("error_message"),

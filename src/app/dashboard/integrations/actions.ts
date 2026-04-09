@@ -16,10 +16,12 @@ export interface Integration {
   isDefault: boolean;
   googleAccountId: string | null;
   googleAccountEmail: string | null;
+  externalAccountId: string;
   metadata: {
     thumbnail?: string;
     description?: string;
   } | null;
+  scope: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -62,7 +64,9 @@ export async function getIntegrationsForUser(userId: string): Promise<{
       isDefault: integration.isDefault,
       googleAccountId: integration.googleAccountId,
       googleAccountEmail: integration.googleAccountEmail,
+      externalAccountId: integration.externalAccountId,
       metadata: integration.metadata ? JSON.parse(integration.metadata) : null,
+      scope: integration.scope,
       createdAt: integration.createdAt.toISOString(),
       updatedAt: integration.updatedAt.toISOString(),
     }));
@@ -120,7 +124,9 @@ export async function getIntegrationsByGoogleAccountForUser(userId: string): Pro
         isDefault: integration.isDefault,
         googleAccountId: integration.googleAccountId,
         googleAccountEmail: integration.googleAccountEmail,
+        externalAccountId: integration.externalAccountId,
         metadata: integration.metadata ? JSON.parse(integration.metadata) : null,
+        scope: integration.scope,
         createdAt: integration.createdAt.toISOString(),
         updatedAt: integration.updatedAt.toISOString(),
       };
@@ -364,7 +370,9 @@ export async function connectYouTubeChannel(
         handle: channelHandle,
         googleAccountId: integrationTokens.googleAccountId,
         googleAccountEmail: integrationTokens.googleAccountEmail,
+        externalAccountId: fetchedChannelId,
         metadata: JSON.parse(metadata),
+        scope: integrationTokens.scope,
         isActive: true,
         isDefault: !hasExistingYouTube,
       },

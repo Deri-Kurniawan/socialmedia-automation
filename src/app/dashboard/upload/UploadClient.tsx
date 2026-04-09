@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { format } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,6 +23,14 @@ import VideoUploadForm from "@/components/video-upload-form";
 import { ChannelSelector } from "@/components/channel-selector";
 import { getIntegrations } from "../integrations/actions";
 import type { Integration } from "../integrations/actions";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { ExternalLink } from "lucide-react";
 
 // YouTube Icon Component
 function YouTubeIcon({ className }: { className?: string }) {
@@ -59,6 +68,19 @@ export function UploadClient({ initialIntegrations, user }: UploadClientProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [uploadCount, setUploadCount] = useState(0);
+  const [showPlatformsModal, setShowPlatformsModal] = useState(false);
+
+  // Start the integration OAuth flow
+  const startConnectFlow = (platform: string, switchAccount = false) => {
+    if (platform === "youtube") {
+      const params = new URLSearchParams();
+      params.set("redirect", "/dashboard/upload");
+      if (switchAccount) {
+        params.set("switchAccount", "true");
+      }
+      window.location.href = `/api/auth/youtube?${params.toString()}`;
+    }
+  };
 
   // Initialize selected integration
   useEffect(() => {
@@ -251,13 +273,16 @@ export function UploadClient({ initialIntegrations, user }: UploadClientProps) {
                     onSelect={setSelectedIntegration}
                   />
 
-                  {/* Add Another Channel Link */}
-                  <Link href="/dashboard/integrations">
-                    <Button variant="ghost" size="sm" className="w-full mt-3 text-xs">
-                      <Plus className="h-3 w-3 mr-1" />
-                      Add Another Channel
-                    </Button>
-                  </Link>
+                  {/* Add Another Channel */}
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="w-full mt-3 text-xs"
+                    onClick={() => setShowPlatformsModal(true)}
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add Another Channel
+                  </Button>
                 </CardContent>
               </Card>
             )}
@@ -316,7 +341,7 @@ export function UploadClient({ initialIntegrations, user }: UploadClientProps) {
                             {upload.title}
                           </p>
                           <p className="text-xs text-zinc-500">
-                            {new Date(upload.createdAt).toLocaleDateString()}
+                            {format(new Date(upload.createdAt), "MMM d, yyyy")}
                           </p>
                         </div>
                         <Badge
@@ -375,6 +400,80 @@ export function UploadClient({ initialIntegrations, user }: UploadClientProps) {
           </div>
         </div>
       )}
+
+      {/* Add Integration Modal */}
+      <Dialog open={showPlatformsModal} onOpenChange={setShowPlatformsModal}>
+        <DialogContent className="sm:max-w-xl md:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add Integration</DialogTitle>
+            <DialogDescription>
+              Connect a new social media account to start uploading content.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4">
+            {/* YouTube Integration */}
+            {(() => {
+              const platform = "youtube";
+              const platformIntegrations = integrations.filter((i) => i.platform === platform && i.isActive);
+              const integrationCount = platformIntegrations.length;
+
+              return (
+                <div
+                  key={platform}
+                  className="flex items-start gap-4 p-4 border rounded-lg transition-colors hover:border-zinc-300"
+                >
+                  {/* YouTube Icon */}
+                  <div className="bg-red-600 text-white p-3 rounded-lg">
+                    <YouTubeIcon className="h-6 w-6" />
+                  </div>
+
+                  {/* Platform Info */}
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">
+                        YouTube
+                      </h3>
+                      {integrationCount > 0 && (
+                        <div className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                          </span>
+                          {integrationCount} connected
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-sm text-zinc-500 mt-1">
+                      Upload videos with full YouTube permissions
+                    </p>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Requires separate Google authorization
+                    </p>
+
+                    {/* Connect / Add Another Button */}
+                    <Button
+                      size="sm"
+                      className="w-full mt-3"
+                      variant={integrationCount > 0 ? "outline" : "default"}
+                      onClick={() => {
+                        startConnectFlow(platform, integrationCount > 0);
+                        setShowPlatformsModal(false);
+                      }}
+                    >
+                      {integrationCount > 0 ? (
+                        <><Plus className="h-4 w-4 mr-1" /> Add Another Channel</>
+                      ) : (
+                        <><ExternalLink className="h-4 w-4 mr-1" /> Connect YouTube</>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

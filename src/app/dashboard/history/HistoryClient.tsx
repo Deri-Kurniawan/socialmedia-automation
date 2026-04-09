@@ -141,7 +141,7 @@ export function HistoryClient({ initialUploads, integrations, userName }: Histor
 
   const refreshHistory = async () => {
     setIsRefreshing(true);
-    
+
     await toast.promise(
       fetch("/api/video/history").then(async (response) => {
         if (!response.ok) throw new Error("Failed to refresh");
@@ -155,7 +155,7 @@ export function HistoryClient({ initialUploads, integrations, userName }: Histor
         error: "Failed to refresh history",
       }
     );
-    
+
     setIsRefreshing(false);
   };
 
@@ -257,15 +257,6 @@ export function HistoryClient({ initialUploads, integrations, userName }: Histor
     <div className="max-w-[1440px] mx-auto">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center gap-2 mb-2">
-          <Link
-            href="/dashboard"
-            className="text-sm text-zinc-500 hover:text-zinc-900 flex items-center gap-1"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Back to Dashboard
-          </Link>
-        </div>
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">

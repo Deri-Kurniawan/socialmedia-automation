@@ -145,11 +145,19 @@ export async function getIntegrationsByGoogleAccountForUser(userId: string): Pro
     for (const [accountId, channels] of grouped) {
       // Get email from first channel
       const email = channels[0]?.googleAccountEmail || null;
+      // Only include active channels in the account
+      const activeChannels = channels.filter(c => c.isActive);
+      // Skip accounts that have no active channels
+      if (activeChannels.length === 0) {
+        // Move inactive channels to ungrouped so they can be displayed separately
+        ungrouped.push(...channels);
+        continue;
+      }
       accounts.push({
         accountId,
         email,
-        channelCount: channels.length,
-        channels: channels.filter(c => c.isActive),
+        channelCount: activeChannels.length,
+        channels: activeChannels,
       });
     }
 
